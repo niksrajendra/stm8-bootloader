@@ -18,7 +18,7 @@ def crc8_update(data, crc):
     return crc & 0xFF
 
 def get_crc():
-    crc = 0
+    crc = 0x0
     data = open(FILE, 'rb')
     with data as f:
         chunk = bytearray(f.read(BLOCK_SIZE))
@@ -42,18 +42,24 @@ def bootloader_enter(ser):
     crc = get_crc()
     req.extend([chunks, crc, crc])
     ser.write(req)
-    ser.flushOutput()
+    #ser.flushOutput()
     return ser
 
-def bootloader_exec(port, baud):
-    ser = serial.Serial(port, 115200, timeout=1.0)
+def bootloader_exec(port, baud=115200):
+    ser = serial.Serial(port, baud, timeout=2.0, write_timeout=0.5, inter_byte_timeout=2, bytesize=8, parity='N', 
+    stopbits=1)
+    sleep(1)
     bootloader_enter(ser)
+    ser.flushInput()
+    rxbuff = ser.read(4)
+    print(rxbuff)
     data = open(FILE, 'rb')
     total = 0
     with data as f:
         chunk = bytearray(f.read(BLOCK_SIZE))
         while chunk:
             rx = ser.read(2)
+            print(rx)
             if len(rx) != 2:
                 print('Timeout')
                 return
@@ -61,9 +67,13 @@ def bootloader_exec(port, baud):
             print(total)
             chunk.extend([0xFF] * (BLOCK_SIZE - len(chunk)))
             ser.write(chunk)
-            ser.flushOutput()
+            #ser.flushOutput()
+            #rxbuff = ser.read(BLOCK_SIZE)
+            #print(rxbuff)
             chunk = bytearray(f.read(BLOCK_SIZE))
+        #bytesToRead = ser.inWaiting()
         ack = ser.read(2)
+        print(ack)
         if ack == bytearray(ACK):
             print('Done')
         elif ack == bytearray(NACK):
