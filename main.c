@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdio.h>
 #include "config.h"
 #include "stm8.h"
 #include "ram.h"
@@ -8,6 +9,7 @@ static uint8_t ivt[128];
 static uint8_t f_ram[128];
 static uint8_t rx_buffer[BLOCK_SIZE];
 static volatile uint8_t RAM_SEG_LEN;
+void hse_enable(void);
 static void (*flash_write_block)(uint16_t addr, const uint8_t *buf) =
         (void (*)(uint16_t, const uint8_t *)) f_ram;
 
@@ -111,10 +113,21 @@ static void serial_read_block(uint8_t *dest) {
     }
 }
 
+void hse_enable(void) {
+    /* Enable HSE crystal oscillator */
+    //CLK_ECKRbits.HSEEN = 1u;
+    CLK_ECKR |= 0x01;
+    while (!(CLK_ECKR & 0x02));
+    /* Switch master clock to HSE */
+    CLK_SWR = 0xB4;
+    while (!(CLK_SWCR & (1 << 3)));
+    CLK_SWCR |= (1 << 1);
+}
+
 /**
  * Enter bootloader and perform firmware update
  */
-inline void bootloader_exec() {
+inline void bootloader_exec(void) {
     uint8_t chunks, crc_rx;
     uint16_t addr = BOOT_ADDR;
 
@@ -133,6 +146,10 @@ inline void bootloader_exec() {
         rx = uart_read();
         if (crc_rx != rx)
             continue;
+		uart_write('b');
+		uart_write('o');
+		uart_write('o');
+		uart_write('t');
         break;
     }
 
@@ -192,10 +209,11 @@ inline void ram_cpy() {
 }
 
 void bootloader_main() {
+	hse_enable();
     BOOT_PIN_CR1 = 1 << BOOT_PIN;
     if (!(BOOT_PIN_IDR & (1 << BOOT_PIN))) {
         /* execute bootloader */
-        CLK_CKDIVR = 0;
+        //CLK_CKDIVR = 0;
         ram_cpy();
         iwdg_init();
         uart_init();
